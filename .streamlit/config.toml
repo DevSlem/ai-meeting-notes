@@ -4,6 +4,12 @@
 # Note: Actual limit may depend on system memory and server configuration
 maxUploadSize = 99999
 
+# Bind to localhost only (not accessible from network)
+address = "localhost"
+
+# Port number (default: 8501)
+port = 8501
+
 # Enable CORS for development
 enableCORS = false
 
