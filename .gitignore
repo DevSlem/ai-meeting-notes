@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Recordings
+recordings/
+
+# Configuration (contains sensitive data)
+.config/
+*.env
+.env.*

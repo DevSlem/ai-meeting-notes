@@ -1,0 +1,14 @@
+[server]
+# Maximum file upload size in MB
+# Default is 200MB, setting to 2000MB (2GB)
+maxUploadSize = 2000
+
+# Enable CORS for development
+enableCORS = false
+
+# Enable XSRF protection
+enableXsrfProtection = true
+
+[browser]
+# Automatically open browser on startup
+gatherUsageStats = false
