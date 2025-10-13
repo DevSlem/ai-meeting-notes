@@ -45,6 +45,9 @@ The app opens at `http://localhost:8501`.
 2. Click 🔴 Start Recording → Speak → ⏹️ Stop Recording
 3. File saved automatically to `recordings/` directory
 
+> [!NOTE]
+> If you want to record your system audio (e.g., Zoom calls), use a virtual audio device like [BlackHole (macOS)](https://github.com/ExistentialAudio/BlackHole) or [VB-Audio Virtual Cable (Windows)](https://vb-audio.com/Cable/).
+
 ### Transcribing Audio
 1. Click 🎙️ button in Recordings tab
 2. Select model (GPT-4o Mini recommended for most cases)
@@ -71,13 +74,18 @@ The app opens at `http://localhost:8501`.
 
 Compression **auto-enabled** when file >25MB or duration >20min.
 
+> [!NOTE]
+> The ratio is arbitrary and depends on the audio content.
+
 ## API Models & Pricing
+
+Transcription models:
 
 | Model | Price/hour | Best For |
 |-------|------------|----------|
-| GPT-4o Mini | $0.18 | Most meetings (recommended) |
-| GPT-4o | $0.36 | Complex audio, heavy accents |
-| Whisper-1 | $0.36 | When timestamps needed |
+| `gpt-4o-mini-transcribe` | $0.18 | Most meetings (recommended) |
+| `gpt-4o-transcribe` | $0.36 | Complex audio, heavy accents |
+| `whisper-1` | $0.36 | When timestamps needed |
 
 ## File Structure
 
