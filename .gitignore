@@ -16,3 +16,5 @@ recordings/
 .config/
 *.env
 .env.*
+.DS_Store
+.vscode/
