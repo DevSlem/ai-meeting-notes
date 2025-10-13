@@ -108,32 +108,65 @@ def page_record_and_upload():
                 st.session_state.show_last_recording = False
 
     # Upload Section
-    with st.expander("📤 Upload Audio File", expanded=True):
-        st.markdown("Upload an existing audio file to your recordings.")
+    with st.expander("📤 Upload Audio Files", expanded=True):
+        st.markdown("Upload one or more audio files to your recordings.")
 
-        uploaded_file = st.file_uploader(
-            "Choose an audio file",
+        uploaded_files = st.file_uploader(
+            "Choose audio files",
             type=['wav', 'mp3', 'm4a', 'flac', 'ogg', 'webm'],
-            help="Upload an audio file to save to recordings"
+            help="Upload audio files to save to recordings",
+            accept_multiple_files=True
         )
 
-        if st.button("💾 Save Upload", disabled=uploaded_file is None, use_container_width=True):
-            if uploaded_file:
-                # Save to temp file first
-                temp_path = f"/tmp/{uploaded_file.name}"
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+        if st.button("💾 Save Uploads", disabled=not uploaded_files, use_container_width=True):
+            if uploaded_files:
+                success_count = 0
+                error_count = 0
+                error_messages = []
 
-                filepath, message = file_manager.save_uploaded_file(temp_path)
-                if filepath:
-                    st.success(f"{message}\n\n→ Go to Browse Recordings to view your file.")
-                    # Clean up temp file
+                # Use a progress bar for multiple files
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                for idx, uploaded_file in enumerate(uploaded_files):
+                    status_text.text(f"Processing {idx + 1}/{len(uploaded_files)}: {uploaded_file.name}")
+
                     try:
-                        os.remove(temp_path)
-                    except:
-                        pass
-                else:
-                    st.error(message)
+                        # Save to temp file first
+                        temp_path = os.path.join(tempfile.gettempdir(), uploaded_file.name)
+                        with open(temp_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+
+                        filepath, message = file_manager.save_uploaded_file(temp_path, index=idx)
+                        if filepath:
+                            success_count += 1
+                        else:
+                            error_count += 1
+                            error_messages.append(f"{uploaded_file.name}: {message}")
+
+                        # Clean up temp file
+                        try:
+                            os.remove(temp_path)
+                        except:
+                            pass
+
+                    except Exception as e:
+                        error_count += 1
+                        error_messages.append(f"{uploaded_file.name}: {str(e)}")
+
+                    # Update progress
+                    progress_bar.progress((idx + 1) / len(uploaded_files))
+
+                # Clear progress indicators
+                progress_bar.empty()
+                status_text.empty()
+
+                # Show results
+                if success_count > 0:
+                    st.success(f"✓ Successfully uploaded {success_count} file(s)\n\n→ Go to Recordings tab to view your files.")
+
+                if error_count > 0:
+                    st.error(f"✗ Failed to upload {error_count} file(s):\n" + "\n".join(error_messages))
 
 
 @st.dialog("⚙️ API Key Settings", width="large")

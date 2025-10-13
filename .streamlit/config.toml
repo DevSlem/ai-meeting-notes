@@ -1,7 +1,8 @@
 [server]
 # Maximum file upload size in MB
-# Default is 200MB, setting to 2000MB (2GB)
-maxUploadSize = 2000
+# Setting to very large value to effectively remove limit
+# Note: Actual limit may depend on system memory and server configuration
+maxUploadSize = 99999
 
 # Enable CORS for development
 enableCORS = false

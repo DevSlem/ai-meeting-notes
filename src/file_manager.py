@@ -15,8 +15,17 @@ class AudioFileManager:
         self.recordings_dir = recordings_dir
         os.makedirs(self.recordings_dir, exist_ok=True)
 
-    def save_uploaded_file(self, uploaded_file_path: str) -> Tuple[Optional[str], str]:
-        """Save an uploaded audio file to the recordings directory."""
+    def save_uploaded_file(self, uploaded_file_path: str, index: int = 0) -> Tuple[Optional[str], str]:
+        """
+        Save an uploaded audio file to the recordings directory.
+
+        Args:
+            uploaded_file_path: Path to the uploaded file
+            index: Index for multiple file uploads (default: 0)
+
+        Returns:
+            Tuple of (destination_path, message)
+        """
         try:
             if not uploaded_file_path or not os.path.exists(uploaded_file_path):
                 return None, "No valid file provided."
@@ -26,9 +35,9 @@ class AudioFileManager:
             if not ext:
                 ext = ".wav"
 
-            # Create new filename with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"upload_{timestamp}{ext}"
+            # Create new filename with timestamp and microseconds to avoid collisions
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            filename = f"upload_{timestamp}_{index:03d}{ext}"
             destination = os.path.join(self.recordings_dir, filename)
 
             # Copy file to recordings directory
