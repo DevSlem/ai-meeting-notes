@@ -21,14 +21,18 @@ A Streamlit-based application for recording, managing, and transcribing meeting 
 ## Installation
 
 ```bash
-# Install dependencies
-uv sync
+# Clone repository
+git clone https://github.com/DevSlem/ai-meeting-notes.git
+cd ai-meeting-notes
 
-# Run application
-streamlit run main.py
+# Install dependencies and start the app
+uv run streamlit run main.py
 ```
 
 The app opens at `http://localhost:8501`.
+
+> [!NOTE]
+> Docker is not recommended for this application as it requires direct microphone access which is difficult to configure in containers.
 
 ## Quick Start
 
@@ -74,7 +78,7 @@ The app opens at `http://localhost:8501`.
 
 Compression **auto-enabled** when file >25MB or duration >20min.
 
-> [!NOTE]
+> [!WARNING]
 > The ratio is arbitrary and depends on the audio content.
 
 ## API Models & Pricing
