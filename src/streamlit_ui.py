@@ -89,23 +89,55 @@ def page_record_and_upload():
                 else:
                     st.error(message)
 
+        # Volume level indicator when recording
         if st.session_state.is_recording:
-            st.info("🔴 Recording in progress...")
+            status_text, status_color = recorder.get_volume_status()
+            volume_level = recorder.get_volume_level()
+
+            # Display status with color
+            if status_color == "green":
+                st.success(f"🎙️ {status_text}")
+            elif status_color == "orange":
+                st.warning(f"🎙️ {status_text}")
+            elif status_color == "red":
+                st.error(f"🎙️ {status_text}")
+            else:
+                st.info("🔴 Recording in progress...")
+
+            # Volume level bar (visual indicator)
+            # Normalize volume to 0-100% range for better visualization
+            # Typical speech: 0.005-0.02, so we scale by 50x to get good visual range
+            volume_percent = min(volume_level * 5000, 100)  # Increased scaling for better sensitivity
+
+            # Create a simple progress bar for volume
+            st.progress(volume_percent / 100.0, text=f"Volume: {volume_percent:.0f}%")
+
+            # Auto-refresh to update volume level (every 0.5 seconds)
+            import time
+            time.sleep(0.5)
+            st.rerun()
 
         # Show last recorded audio if available
         if st.session_state.get('show_last_recording', False) and st.session_state.get('last_recorded_file'):
-            st.markdown("**Last Recording:**")
-            try:
-                with open(st.session_state.last_recorded_file, 'rb') as f:
-                    audio_bytes = f.read()
-                    st.audio(audio_bytes, format='audio/wav')
-                if st.button("🗑️ Clear Preview", use_container_width=True):
+            # Check if file still exists
+            if os.path.exists(st.session_state.last_recorded_file):
+                st.markdown("**Last Recording:**")
+                try:
+                    with open(st.session_state.last_recorded_file, 'rb') as f:
+                        audio_bytes = f.read()
+                        st.audio(audio_bytes, format='audio/wav')
+                    if st.button("🗑️ Clear Preview", use_container_width=True):
+                        st.session_state.show_last_recording = False
+                        st.session_state.last_recorded_file = None
+                        st.rerun()
+                except Exception as e:
+                    st.warning(f"⚠️ Could not load recording: {str(e)}")
                     st.session_state.show_last_recording = False
                     st.session_state.last_recorded_file = None
-                    st.rerun()
-            except Exception as e:
-                st.warning(f"⚠️ Could not load recording: {str(e)}")
+            else:
+                # File was deleted, clear the state silently
                 st.session_state.show_last_recording = False
+                st.session_state.last_recorded_file = None
 
     # Upload Section
     with st.expander("📤 Upload Audio Files", expanded=True):
@@ -647,7 +679,76 @@ def page_recordings():
         st.info("📭 No recordings found. Record or upload audio in the 'Record & Upload' tab.")
         return
 
-    st.markdown(f"**Total Recordings:** {len(recordings)}")
+    # Initialize selected files in session state
+    if 'selected_files_for_deletion' not in st.session_state:
+        st.session_state.selected_files_for_deletion = set()
+
+    selected_count = len(st.session_state.selected_files_for_deletion)
+
+    # Header with total count and bulk actions
+    col_header1, col_header2 = st.columns([2, 1])
+
+    with col_header1:
+        st.markdown(f"**Total Recordings:** {len(recordings)}")
+
+    with col_header2:
+        # Bulk delete button - always show, but disable if nothing selected
+        if st.button(
+            f"🗑️ Delete Selected ({selected_count})" if selected_count > 0 else "🗑️ Delete Selected",
+            type="primary" if selected_count > 0 else "secondary",
+            disabled=selected_count == 0,
+            use_container_width=True,
+            key="bulk_delete_button"
+        ):
+            # Delete all selected files
+            success_count = 0
+            failed_count = 0
+
+            for filepath in list(st.session_state.selected_files_for_deletion):
+                success, message = file_manager.delete_recording(filepath)
+                if success:
+                    success_count += 1
+                    # Clear session state if the deleted file was the last recorded file
+                    if st.session_state.get('last_recorded_file') == filepath:
+                        st.session_state.show_last_recording = False
+                        st.session_state.last_recorded_file = None
+                else:
+                    failed_count += 1
+
+            # Clear selection
+            st.session_state.selected_files_for_deletion = set()
+
+            # Show results
+            if success_count > 0:
+                st.success(f"✓ Deleted {success_count} file(s)")
+            if failed_count > 0:
+                st.error(f"✗ Failed to delete {failed_count} file(s)")
+
+            st.rerun()
+
+    st.markdown("---")
+
+    # Select All section with explicit button
+    col_select_all1, col_select_all2, col_select_all3 = st.columns([1, 1, 3])
+
+    all_filepaths = [filepath for _, filepath, _ in recordings]
+    all_selected = (len(st.session_state.selected_files_for_deletion) == len(recordings) and len(recordings) > 0)
+
+    with col_select_all1:
+        if st.button("✓ Select All", use_container_width=True, disabled=all_selected):
+            st.session_state.selected_files_for_deletion = set(all_filepaths)
+            st.rerun()
+
+    with col_select_all2:
+        if st.button("✗ Deselect All", use_container_width=True, disabled=len(st.session_state.selected_files_for_deletion) == 0):
+            st.session_state.selected_files_for_deletion = set()
+            st.rerun()
+
+    with col_select_all3:
+        if selected_count > 0:
+            st.markdown(f"*{selected_count} file(s) selected*")
+
+    st.markdown("---")
 
     # Display recordings in a table-like format
     for filename, filepath, date_str in recordings:
@@ -655,7 +756,43 @@ def page_recordings():
         display_name = file_manager.get_display_name(filepath)
 
         with st.container():
-            col1, col2, col3, col4, col5 = st.columns([3, 2, 1, 1, 0.5])
+            col_checkbox, col1, col2, col3, col4, col5 = st.columns([0.3, 2.7, 2, 1, 1, 0.5])
+
+            with col_checkbox:
+                # Checkbox for bulk selection - sync with session state
+                checkbox_key = f"select_{filename}"
+                is_selected = filepath in st.session_state.selected_files_for_deletion
+
+                # Synchronize widget state with selection state
+                # This ensures Select All/Deselect All updates the checkboxes
+                if checkbox_key in st.session_state:
+                    # Widget exists - check if we need to sync from selected_files_for_deletion
+                    widget_state = st.session_state[checkbox_key]
+                    if widget_state != is_selected:
+                        # Mismatch: selection state changed externally (Select All/Deselect All)
+                        # Update widget to match
+                        st.session_state[checkbox_key] = is_selected
+                else:
+                    # First render - initialize widget from selection state
+                    st.session_state[checkbox_key] = is_selected
+
+                # Create unique callback that updates selection based on checkbox state
+                def make_toggle_callback(fp, ck):
+                    def toggle():
+                        # Read the NEW checkbox state (after toggle)
+                        new_checkbox_state = st.session_state[ck]
+                        if new_checkbox_state:
+                            st.session_state.selected_files_for_deletion.add(fp)
+                        else:
+                            st.session_state.selected_files_for_deletion.discard(fp)
+                    return toggle
+
+                st.checkbox(
+                    f"Select {filename}",
+                    key=checkbox_key,
+                    label_visibility="collapsed",
+                    on_change=make_toggle_callback(filepath, checkbox_key)
+                )
 
             with col1:
                 st.markdown(f"**{display_name}**")
@@ -687,6 +824,10 @@ def page_recordings():
                 if st.button("🗑️", key=f"delete_{filename}", use_container_width=True, help="Delete"):
                     success, message = file_manager.delete_recording(filepath)
                     if success:
+                        # Clear session state if the deleted file was the last recorded file
+                        if st.session_state.get('last_recorded_file') == filepath:
+                            st.session_state.show_last_recording = False
+                            st.session_state.last_recorded_file = None
                         st.success(message)
                         st.rerun()
                     else:

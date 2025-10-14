@@ -19,6 +19,8 @@ class AudioRecorder:
         self.sample_rate = 44100
         self.device_id: Optional[int] = None
         self.stream = None
+        self.current_volume_level = 0.0  # Current audio volume level (0.0 to 1.0)
+        self.volume_history = []  # Recent volume levels for smoothing
         os.makedirs(self.output_dir, exist_ok=True)
 
     def get_microphone_devices(self) -> List[str]:
@@ -50,6 +52,23 @@ class AudioRecorder:
         if self.is_recording:
             self.recording_data.append(indata.copy())
 
+            # Calculate current volume level (RMS - Root Mean Square)
+            volume = np.sqrt(np.mean(indata**2))
+
+            # Apply noise gate: ignore very low levels (background noise)
+            # This helps filter out ambient noise while keeping speech
+            # Balanced threshold for noise filtering
+            noise_threshold = 0.005
+            if volume < noise_threshold:
+                volume = 0.0
+
+            self.current_volume_level = float(volume)
+
+            # Keep history of recent volumes for smoothing (last 10 samples)
+            self.volume_history.append(self.current_volume_level)
+            if len(self.volume_history) > 10:
+                self.volume_history.pop(0)
+
     def start_recording(self, device_idx: str, sample_rate: int = 44100) -> tuple[bool, str]:
         """Start recording audio from selected microphone."""
         try:
@@ -63,6 +82,8 @@ class AudioRecorder:
             self.device_id = int(device_idx.split(":")[0])
             self.sample_rate = sample_rate
             self.recording_data = []
+            self.current_volume_level = 0.0
+            self.volume_history = []
             self.is_recording = True
 
             # Start audio stream
@@ -119,3 +140,37 @@ class AudioRecorder:
             duration = sum(len(chunk) for chunk in self.recording_data) / self.sample_rate
             return f"Recording... ({duration:.1f}s)"
         return "Ready to record"
+
+    def get_volume_level(self) -> float:
+        """
+        Get current audio volume level (smoothed).
+
+        Returns:
+            Volume level from 0.0 (silent) to 1.0 (maximum)
+        """
+        if not self.is_recording or not self.volume_history:
+            return 0.0
+
+        # Return smoothed average of recent volumes
+        return float(np.mean(self.volume_history))
+
+    def get_volume_status(self) -> tuple[str, str]:
+        """
+        Get volume status description and color.
+
+        Returns:
+            Tuple of (status_text, color) where color is 'green', 'orange', or 'red'
+        """
+        if not self.is_recording:
+            return "Ready to record", "grey"
+
+        volume = self.get_volume_level()
+
+        # Threshold values adjusted for typical microphone input levels
+        # With noise gate at 0.005, normal speech is usually in the 0.008-0.03 range
+        if volume > 0.008:  # Good audio level - clear speech
+            return "Recording active - Audio detected", "green"
+        elif volume > 0.005:  # Low audio level - above noise gate but quiet
+            return "Recording - Audio level low", "orange"
+        else:  # Very low or no audio - below noise gate
+            return "Recording - No audio detected", "red"

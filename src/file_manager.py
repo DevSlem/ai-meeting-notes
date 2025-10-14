@@ -81,7 +81,7 @@ class AudioFileManager:
         return recordings
 
     def delete_recording(self, filepath: str) -> Tuple[bool, str]:
-        """Delete a recording file."""
+        """Delete a recording file and its associated metadata."""
         try:
             if not filepath or not os.path.exists(filepath):
                 return False, "File not found."
@@ -90,7 +90,26 @@ class AudioFileManager:
             if not os.path.abspath(filepath).startswith(os.path.abspath(self.recordings_dir)):
                 return False, "Cannot delete files outside recordings directory."
 
+            # Delete the audio file
             os.remove(filepath)
+
+            # Delete associated metadata JSON file
+            metadata_file = self._get_metadata_filepath(filepath)
+            if os.path.exists(metadata_file):
+                try:
+                    os.remove(metadata_file)
+                except Exception as e:
+                    print(f"Warning: Could not delete metadata file {metadata_file}: {e}")
+
+            # Delete legacy .txt transcription file if it exists
+            base_name = os.path.splitext(filepath)[0]
+            txt_file = f"{base_name}.txt"
+            if os.path.exists(txt_file):
+                try:
+                    os.remove(txt_file)
+                except Exception as e:
+                    print(f"Warning: Could not delete txt file {txt_file}: {e}")
+
             return True, "File deleted successfully."
 
         except Exception as e:
@@ -113,7 +132,7 @@ class AudioFileManager:
 
     def save_transcription(self, audio_filepath: str, transcription_text: str) -> Tuple[bool, str]:
         """
-        Save transcription text for an audio file.
+        Save transcription text for an audio file in metadata JSON.
 
         Args:
             audio_filepath: Path to the audio file
@@ -126,22 +145,28 @@ class AudioFileManager:
             if not os.path.exists(audio_filepath):
                 return False, "Audio file not found."
 
-            # Create transcription filename (same name but .txt extension)
-            base_name = os.path.splitext(audio_filepath)[0]
-            transcription_file = f"{base_name}.txt"
+            # Load existing metadata or create new
+            metadata = self.load_metadata(audio_filepath)
 
-            # Save transcription
-            with open(transcription_file, 'w', encoding='utf-8') as f:
-                f.write(transcription_text)
+            # Add transcription to metadata
+            metadata['transcription'] = transcription_text
+            metadata['transcribed_at'] = datetime.now().isoformat()
 
-            return True, f"Transcription saved to {os.path.basename(transcription_file)}"
+            # Save metadata
+            success, message = self.save_metadata(audio_filepath, metadata)
+
+            if success:
+                return True, "Transcription saved successfully"
+            else:
+                return False, message
 
         except Exception as e:
             return False, f"Error saving transcription: {str(e)}"
 
     def load_transcription(self, audio_filepath: str) -> Optional[str]:
         """
-        Load transcription text for an audio file.
+        Load transcription text for an audio file from metadata JSON.
+        Falls back to reading .txt file if JSON doesn't have transcription (for migration).
 
         Args:
             audio_filepath: Path to the audio file
@@ -150,21 +175,47 @@ class AudioFileManager:
             The transcription text if found, None otherwise
         """
         try:
+            # Try to load from JSON metadata first
+            metadata = self.load_metadata(audio_filepath)
+            if metadata and 'transcription' in metadata:
+                return metadata['transcription']
+
+            # Fallback: try to load from old .txt file (for migration)
             base_name = os.path.splitext(audio_filepath)[0]
             transcription_file = f"{base_name}.txt"
 
-            if not os.path.exists(transcription_file):
-                return None
+            if os.path.exists(transcription_file):
+                with open(transcription_file, 'r', encoding='utf-8') as f:
+                    transcription_text = f.read()
 
-            with open(transcription_file, 'r', encoding='utf-8') as f:
-                return f.read()
+                # Migrate to JSON format
+                if transcription_text:
+                    self.save_transcription(audio_filepath, transcription_text)
+                    # Optionally delete old .txt file
+                    try:
+                        os.remove(transcription_file)
+                    except:
+                        pass
+
+                return transcription_text
+
+            return None
 
         except Exception as e:
             print(f"Error loading transcription: {e}")
             return None
 
     def has_transcription(self, audio_filepath: str) -> bool:
-        """Check if an audio file has an associated transcription."""
+        """
+        Check if an audio file has an associated transcription.
+        Checks both JSON metadata and legacy .txt file.
+        """
+        # Check JSON metadata first
+        metadata = self.load_metadata(audio_filepath)
+        if metadata and 'transcription' in metadata and metadata['transcription']:
+            return True
+
+        # Fallback: check for legacy .txt file
         base_name = os.path.splitext(audio_filepath)[0]
         transcription_file = f"{base_name}.txt"
         return os.path.exists(transcription_file)

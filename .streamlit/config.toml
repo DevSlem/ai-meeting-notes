@@ -10,11 +10,12 @@ address = "localhost"
 # Port number (default: 8501)
 port = 8501
 
-# Enable CORS for development
+# Disable CORS since we're running locally only
 enableCORS = false
 
-# Enable XSRF protection
-enableXsrfProtection = true
+# Disable XSRF protection for local development
+# This is safe since address is bound to localhost only
+enableXsrfProtection = false
 
 [browser]
 # Automatically open browser on startup
