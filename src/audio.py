@@ -24,26 +24,44 @@ class AudioRecorder:
         os.makedirs(self.output_dir, exist_ok=True)
 
     def get_microphone_devices(self) -> List[str]:
-        """Get list of available microphone devices."""
+        """Get list of available microphone devices with channel info."""
         devices = sd.query_devices()
         microphones = []
 
         for idx, device in enumerate(devices):
             if device['max_input_channels'] > 0:
-                microphones.append(f"{idx}: {device['name']}")
+                channels = device['max_input_channels']
+                microphones.append(f"{idx}: {device['name']} ({channels}ch)")
 
         return microphones
 
     def get_default_microphone(self) -> Optional[str]:
-        """Get the default system microphone."""
+        """Get the default system microphone with channel info."""
         try:
             default_device = sd.query_devices(kind='input')
             if default_device:
                 default_idx = default_device['index']
-                return f"{default_idx}: {default_device['name']}"
+                channels = default_device['max_input_channels']
+                return f"{default_idx}: {default_device['name']} ({channels}ch)"
         except Exception:
             pass
         return None
+
+    def get_device_channels(self, device_idx: int) -> int:
+        """
+        Get the maximum input channels for a device.
+
+        Args:
+            device_idx: Device index
+
+        Returns:
+            Number of input channels (defaults to 1 if unable to determine)
+        """
+        try:
+            device = sd.query_devices(device_idx)
+            return device['max_input_channels']
+        except Exception:
+            return 1  # Default to mono if unable to query
 
     def _audio_callback(self, indata, frames, time, status):
         """Callback function for audio stream."""
@@ -70,7 +88,7 @@ class AudioRecorder:
                 self.volume_history.pop(0)
 
     def start_recording(self, device_idx: str, sample_rate: int = 44100) -> tuple[bool, str]:
-        """Start recording audio from selected microphone."""
+        """Start recording audio from selected microphone with automatic channel detection."""
         try:
             if self.is_recording:
                 return False, "Recording is already in progress."
@@ -86,17 +104,21 @@ class AudioRecorder:
             self.volume_history = []
             self.is_recording = True
 
-            # Start audio stream
+            # Auto-detect number of channels for the device
+            num_channels = self.get_device_channels(self.device_id)
+
+            # Start audio stream with auto-detected channels
             self.stream = sd.InputStream(
                 samplerate=self.sample_rate,
-                channels=1,
+                channels=num_channels,
                 device=self.device_id,
                 callback=self._audio_callback,
                 dtype=np.float32
             )
             self.stream.start()
 
-            return True, "Recording started..."
+            channel_info = f"{num_channels}-channel" if num_channels > 1 else "mono"
+            return True, f"Recording started ({channel_info})..."
 
         except Exception as e:
             self.is_recording = False
