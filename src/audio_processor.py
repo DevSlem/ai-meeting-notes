@@ -265,16 +265,16 @@ class AudioProcessor:
     def merge_transcriptions(
         self,
         transcriptions: List[str],
-        overlap_duration: int = 30
+        overlap_duration: int = 30,
+        strategy: str = "recommended"
     ) -> str:
         """
-        Merge overlapping transcriptions by removing duplicate content.
-
-        Uses suffix-prefix matching to detect and remove overlapping text.
+        Merge overlapping transcriptions using the specified strategy.
 
         Args:
             transcriptions: List of transcription texts
             overlap_duration: Overlap duration (for reference)
+            strategy: Merge strategy - "recommended" (smart overlap removal) or "simple" (direct concatenation)
 
         Returns:
             Merged transcription text
@@ -285,6 +285,35 @@ class AudioProcessor:
         if len(transcriptions) == 1:
             return transcriptions[0]
 
+        if strategy == "simple":
+            return self._merge_simple(transcriptions)
+        else:  # "recommended" or default
+            return self._merge_smart(transcriptions, overlap_duration)
+
+    def _merge_simple(self, transcriptions: List[str]) -> str:
+        """
+        Simple merge: concatenate all transcriptions without overlap removal.
+
+        Args:
+            transcriptions: List of transcription texts
+
+        Returns:
+            Merged transcription text
+        """
+        # Simply join all transcriptions with a space
+        return " ".join(t.strip() for t in transcriptions if t.strip())
+
+    def _merge_smart(self, transcriptions: List[str], overlap_duration: int = 30) -> str:
+        """
+        Smart merge: detect and remove overlapping content using suffix-prefix matching.
+
+        Args:
+            transcriptions: List of transcription texts
+            overlap_duration: Overlap duration (for reference)
+
+        Returns:
+            Merged transcription text with overlaps removed
+        """
         # Start with the first transcription
         merged = transcriptions[0].strip()
 

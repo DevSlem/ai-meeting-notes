@@ -471,6 +471,25 @@ def show_transcribe_dialog(filepath, filename):
             help="Overlap between chunks for long audio files."
         )
 
+        st.markdown("**Chunk Merge Strategy**")
+        merge_strategy = st.radio(
+            "Select merge strategy for long audio:",
+            options=[
+                "Recommended (Smart Overlap Removal)",
+                "Simple (Direct Concatenation)"
+            ],
+            index=0,
+            help="Recommended: Detects and removes duplicate overlapping content. Simple: Concatenates all chunks directly."
+        )
+
+        # Convert display name to strategy key
+        merge_strategy_key = "recommended" if "Recommended" in merge_strategy else "simple"
+
+        if merge_strategy_key == "recommended":
+            st.info("💡 **Recommended**: Uses intelligent suffix-prefix matching to detect and remove overlapping content between chunks (80%+ similarity threshold).")
+        else:
+            st.info("💡 **Simple**: Directly concatenates all transcription chunks with spaces. May result in some duplicate content at chunk boundaries.")
+
         st.markdown("---")
         st.markdown("**Transcription Features**")
 
@@ -598,7 +617,11 @@ def show_transcribe_dialog(filepath, filename):
                 valid_transcriptions = [t for t in transcriptions if t is not None]
 
                 if valid_transcriptions:
-                    transcription_text = audio_processor.merge_transcriptions(valid_transcriptions)
+                    transcription_text = audio_processor.merge_transcriptions(
+                        valid_transcriptions,
+                        overlap_duration=chunk_overlap,
+                        strategy=merge_strategy_key
+                    )
                     st.success(f"✅ Successfully transcribed {len(valid_transcriptions)}/{len(chunk_paths)} chunks")
                 else:
                     st.error("❌ All chunks failed to transcribe")
@@ -1036,6 +1059,26 @@ def page_transcribe():
             help="Overlap between chunks for long audio files. Higher values preserve more context."
         )
 
+        st.markdown("**Chunk Merge Strategy**")
+        merge_strategy = st.radio(
+            "Select merge strategy for long audio:",
+            options=[
+                "Recommended (Smart Overlap Removal)",
+                "Simple (Direct Concatenation)"
+            ],
+            index=0,
+            help="Recommended: Detects and removes duplicate overlapping content. Simple: Concatenates all chunks directly.",
+            key="merge_strategy_page_transcribe"
+        )
+
+        # Convert display name to strategy key
+        merge_strategy_key = "recommended" if "Recommended" in merge_strategy else "simple"
+
+        if merge_strategy_key == "recommended":
+            st.info("💡 **Recommended**: Uses intelligent suffix-prefix matching to detect and remove overlapping content between chunks (80%+ similarity threshold).")
+        else:
+            st.info("💡 **Simple**: Directly concatenates all transcription chunks with spaces. May result in some duplicate content at chunk boundaries.")
+
         st.markdown("---")
         st.markdown("**Transcription Features**")
 
@@ -1173,7 +1216,11 @@ def page_transcribe():
 
                 if valid_transcriptions:
                     # Merge transcriptions
-                    transcription_text = audio_processor.merge_transcriptions(valid_transcriptions)
+                    transcription_text = audio_processor.merge_transcriptions(
+                        valid_transcriptions,
+                        overlap_duration=chunk_overlap,
+                        strategy=merge_strategy_key
+                    )
                     st.success(f"✅ Successfully transcribed {len(valid_transcriptions)}/{len(chunk_paths)} chunks")
                 else:
                     st.error("❌ All chunks failed to transcribe")
