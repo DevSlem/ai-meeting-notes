@@ -18,3 +18,7 @@ recordings/
 .env.*
 .DS_Store
 .vscode/
+
+# Custom prompts (keep default.txt only)
+prompts/meeting-notes/*
+!prompts/meeting-notes/default.txt

@@ -304,3 +304,74 @@ class AudioFileManager:
         metadata = self.load_metadata(audio_filepath)
         metadata['display_name'] = display_name.strip()
         return self.save_metadata(audio_filepath, metadata)
+
+    def save_meeting_notes(self, audio_filepath: str, meeting_notes_text: str,
+                          model: str, usage_info: dict) -> Tuple[bool, str]:
+        """
+        Save meeting notes for an audio file in metadata JSON.
+
+        Args:
+            audio_filepath: Path to the audio file
+            meeting_notes_text: The meeting notes text to save
+            model: Model used to generate the notes
+            usage_info: Token usage information
+
+        Returns:
+            Tuple of (success: bool, message: str)
+        """
+        try:
+            if not os.path.exists(audio_filepath):
+                return False, "Audio file not found."
+
+            # Load existing metadata or create new
+            metadata = self.load_metadata(audio_filepath)
+
+            # Add meeting notes to metadata
+            metadata['meeting_notes'] = meeting_notes_text
+            metadata['meeting_notes_generated_at'] = datetime.now().isoformat()
+            metadata['meeting_notes_model'] = model
+            metadata['meeting_notes_usage'] = usage_info
+
+            # Save metadata
+            success, message = self.save_metadata(audio_filepath, metadata)
+
+            if success:
+                return True, "Meeting notes saved successfully"
+            else:
+                return False, message
+
+        except Exception as e:
+            return False, f"Error saving meeting notes: {str(e)}"
+
+    def load_meeting_notes(self, audio_filepath: str) -> Optional[str]:
+        """
+        Load meeting notes for an audio file from metadata JSON.
+
+        Args:
+            audio_filepath: Path to the audio file
+
+        Returns:
+            The meeting notes text if found, None otherwise
+        """
+        try:
+            metadata = self.load_metadata(audio_filepath)
+            if metadata and 'meeting_notes' in metadata:
+                return metadata['meeting_notes']
+            return None
+
+        except Exception as e:
+            print(f"Error loading meeting notes: {e}")
+            return None
+
+    def has_meeting_notes(self, audio_filepath: str) -> bool:
+        """
+        Check if an audio file has associated meeting notes.
+
+        Args:
+            audio_filepath: Path to the audio file
+
+        Returns:
+            True if meeting notes exist, False otherwise
+        """
+        metadata = self.load_metadata(audio_filepath)
+        return bool(metadata and 'meeting_notes' in metadata and metadata['meeting_notes'])

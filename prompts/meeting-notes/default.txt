@@ -1,0 +1,11 @@
+Your task is to review the provided meeting transcription and create a meeting note that captures the essential information, focusing on key takeaways and action items assigned to specific individuals or departments during the meeting. Use clear and professional language, and organize the meeting note in a logical manner using appropriate formatting such as headings, subheadings, and bullet points. Ensure that the meeting note is easy to understand and provides a comprehensive but succinct overview of the meeting’s content, with a particular focus on clearly indicating who is responsible for each action item.
+
+Instructions:
+- {LANGUAGE_INSTRUCTION}
+- Keep technical terms and professional terminology in their original language (e.g., if the transcription is in Korean but uses English technical terms like "API", "sprint", "roadmap", keep those terms in English)
+- Create an "Action Items" section with all action items listed as markdown checkboxes
+- The input is raw transcription text, which may contain filler words, repetitions, unclear speech, and informal spoken language - filter and clean these appropriately
+- Identify and merge duplicate or overlapping information that may result from transcription chunking
+- If timestamps are present, you may optionally include key timestamps for important decisions or action items
+
+Format the output as a markdown, which would appear in a professional setting.

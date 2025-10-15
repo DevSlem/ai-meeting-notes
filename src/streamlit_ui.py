@@ -258,6 +258,196 @@ def show_api_key_dialog():
         st.warning("⚠ No API key configured. Please enter your OpenAI API key above.")
 
 
+@st.dialog("📝 Prompt Settings", width="large")
+def show_prompt_settings_dialog():
+    """Show prompt management dialog for custom meeting notes prompts."""
+    from pathlib import Path
+
+    prompts_dir = Path("prompts/meeting-notes")
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+
+    st.markdown("**Manage Custom Prompts**")
+    st.markdown("Create and manage custom prompts for AI Meeting Notes generation.")
+
+    # Get available prompts
+    prompt_files = sorted([p.stem for p in prompts_dir.glob("*.txt") if p.is_file()])
+
+    if not prompt_files:
+        st.info("ℹ️ No prompts found. The default prompt will be created automatically.")
+        prompt_files = ["default"]
+
+    # Session state for managing UI
+    if 'prompt_mode' not in st.session_state:
+        st.session_state.prompt_mode = "view"  # view, edit, create
+    if 'selected_prompt_name' not in st.session_state:
+        st.session_state.selected_prompt_name = "default"
+
+    st.markdown("---")
+
+    # Mode selection
+    col_mode1, col_mode2, col_mode3 = st.columns(3)
+    with col_mode1:
+        if st.button("📋 View/Edit Prompts", use_container_width=True,
+                    type="primary" if st.session_state.prompt_mode in ["view", "edit"] else "secondary"):
+            st.session_state.prompt_mode = "view"
+            st.rerun()
+    with col_mode2:
+        if st.button("➕ Create New Prompt", use_container_width=True,
+                    type="primary" if st.session_state.prompt_mode == "create" else "secondary"):
+            st.session_state.prompt_mode = "create"
+            st.session_state.prompt_edit_content = ""
+            st.rerun()
+    with col_mode3:
+        if st.button("✕ Close", use_container_width=True):
+            st.session_state.show_prompt_dialog = False
+            if 'prompt_mode' in st.session_state:
+                del st.session_state.prompt_mode
+            if 'selected_prompt_name' in st.session_state:
+                del st.session_state.selected_prompt_name
+            if 'prompt_edit_content' in st.session_state:
+                del st.session_state.prompt_edit_content
+            st.rerun()
+
+    st.markdown("---")
+
+    # CREATE MODE
+    if st.session_state.prompt_mode == "create":
+        st.markdown("### ➕ Create New Prompt")
+
+        new_prompt_name = st.text_input(
+            "Prompt Name",
+            placeholder="e.g., technical-meeting, sales-call, standup",
+            help="Use lowercase letters, numbers, and hyphens only"
+        )
+
+        new_prompt_content = st.text_area(
+            "Prompt Content",
+            value=st.session_state.get('prompt_edit_content', ''),
+            height=400,
+            placeholder="Enter your custom prompt here...\n\nTip: Use {LANGUAGE_INSTRUCTION} placeholder for language support",
+            help="Write the system prompt that will be used to generate meeting notes"
+        )
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            if st.button("💾 Create Prompt", type="primary", use_container_width=True):
+                if not new_prompt_name:
+                    st.error("❌ Please enter a prompt name.")
+                elif not new_prompt_content.strip():
+                    st.error("❌ Please enter prompt content.")
+                else:
+                    # Sanitize filename
+                    safe_name = new_prompt_name.lower().replace(" ", "-")
+                    safe_name = "".join(c for c in safe_name if c.isalnum() or c == "-")
+
+                    if not safe_name:
+                        st.error("❌ Invalid prompt name. Use only letters, numbers, and hyphens.")
+                    else:
+                        prompt_path = prompts_dir / f"{safe_name}.txt"
+
+                        if prompt_path.exists():
+                            st.error(f"❌ Prompt '{safe_name}' already exists. Choose a different name.")
+                        else:
+                            try:
+                                prompt_path.write_text(new_prompt_content, encoding='utf-8')
+                                st.success(f"✓ Prompt '{safe_name}' created successfully!")
+                                st.session_state.prompt_mode = "view"
+                                st.session_state.selected_prompt_name = safe_name
+                                if 'prompt_edit_content' in st.session_state:
+                                    del st.session_state.prompt_edit_content
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Error creating prompt: {str(e)}")
+        with col2:
+            if st.button("↩️ Cancel", use_container_width=True):
+                st.session_state.prompt_mode = "view"
+                if 'prompt_edit_content' in st.session_state:
+                    del st.session_state.prompt_edit_content
+                st.rerun()
+
+    # VIEW/EDIT MODE
+    elif st.session_state.prompt_mode in ["view", "edit"]:
+        st.markdown("### 📋 View/Edit Prompts")
+
+        # Prompt selection
+        selected_prompt = st.selectbox(
+            "Select Prompt",
+            options=prompt_files,
+            index=prompt_files.index(st.session_state.selected_prompt_name)
+                  if st.session_state.selected_prompt_name in prompt_files else 0,
+            key="prompt_selector"
+        )
+
+        st.session_state.selected_prompt_name = selected_prompt
+        prompt_path = prompts_dir / f"{selected_prompt}.txt"
+
+        # Load prompt content
+        if prompt_path.exists():
+            current_content = prompt_path.read_text(encoding='utf-8')
+        else:
+            current_content = "Prompt file not found."
+
+        # Edit mode toggle
+        if st.session_state.prompt_mode == "view":
+            # Display mode
+            st.markdown("**Prompt Content:**")
+            st.code(current_content, language="text")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✏️ Edit This Prompt", use_container_width=True, type="primary"):
+                    st.session_state.prompt_mode = "edit"
+                    st.session_state.prompt_edit_content = current_content
+                    st.rerun()
+            with col2:
+                # Don't allow deleting default prompt
+                if selected_prompt != "default":
+                    if st.button("🗑️ Delete This Prompt", use_container_width=True):
+                        try:
+                            prompt_path.unlink()
+                            st.success(f"✓ Prompt '{selected_prompt}' deleted successfully!")
+                            st.session_state.selected_prompt_name = "default"
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error deleting prompt: {str(e)}")
+                else:
+                    st.button("🗑️ Delete (Protected)", use_container_width=True, disabled=True,
+                             help="Default prompt cannot be deleted")
+
+        else:  # edit mode
+            # Edit mode
+            edited_content = st.text_area(
+                "Prompt Content",
+                value=st.session_state.get('prompt_edit_content', current_content),
+                height=400,
+                help="Edit the prompt content. Use {LANGUAGE_INSTRUCTION} placeholder for language support"
+            )
+
+            st.session_state.prompt_edit_content = edited_content
+
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if st.button("💾 Save Changes", type="primary", use_container_width=True):
+                    if not edited_content.strip():
+                        st.error("❌ Prompt content cannot be empty.")
+                    else:
+                        try:
+                            prompt_path.write_text(edited_content, encoding='utf-8')
+                            st.success(f"✓ Prompt '{selected_prompt}' saved successfully!")
+                            st.session_state.prompt_mode = "view"
+                            if 'prompt_edit_content' in st.session_state:
+                                del st.session_state.prompt_edit_content
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error saving prompt: {str(e)}")
+            with col2:
+                if st.button("↩️ Cancel", use_container_width=True):
+                    st.session_state.prompt_mode = "view"
+                    if 'prompt_edit_content' in st.session_state:
+                        del st.session_state.prompt_edit_content
+                    st.rerun()
+
+
 @st.dialog("✏️ Rename Recording")
 def show_rename_dialog(filepath):
     """Show dialog to rename a recording."""
@@ -689,6 +879,251 @@ def show_transcribe_dialog(filepath, filename):
             st.rerun()
 
 
+@st.dialog("📝 Generate AI Meeting Notes", width="large")
+def show_meeting_notes_dialog(filepath, filename):
+    """Show AI meeting notes generation dialog for a specific recording."""
+    file_manager = st.session_state.file_manager
+
+    # Import meeting notes service components
+    from src.meeting_notes import MeetingNotesService, MEETING_NOTES_MODELS
+
+    # Check if we have a completed generation result to display
+    if st.session_state.get('meeting_notes_completed', False):
+        st.markdown(f"**File:** {filename}")
+
+        # Display the saved result
+        result = st.session_state.get('meeting_notes_result', {})
+
+        if result.get('success'):
+            st.success("✓ AI Meeting Notes generated successfully.")
+
+            # Show usage info
+            if result.get('usage'):
+                usage = result['usage']
+                st.caption(f"📊 Tokens used: {usage.get('total_tokens', 0)} total "
+                          f"({usage.get('prompt_tokens', 0)} input + {usage.get('completion_tokens', 0)} output)")
+
+            st.markdown("---")
+            st.markdown("### 📝 Meeting Notes")
+
+            # Render markdown in a container with scrolling
+            meeting_notes_content = result.get('notes', '')
+            st.markdown(meeting_notes_content)
+        else:
+            st.error(f"❌ Error: {result.get('error', 'Unknown error')}")
+            if result.get('debug_info'):
+                with st.expander("Debug Information"):
+                    st.code(result['debug_info'])
+            if result.get('traceback'):
+                with st.expander("Full Traceback"):
+                    st.code(result['traceback'])
+
+        st.markdown("---")
+        # Done button - clear all state
+        if st.button("✓ Done - Return to Recordings", type="primary", use_container_width=True):
+            # Clear all meeting notes-related state
+            st.session_state.meeting_notes_completed = False
+            st.session_state.meeting_notes_result = {}
+            st.session_state.show_meeting_notes_dialog = False
+            if 'current_meeting_notes_file' in st.session_state:
+                del st.session_state.current_meeting_notes_file
+            st.rerun()
+        return
+
+    st.markdown(f"**File:** {filename}")
+
+    # Check if API key is configured
+    config = st.session_state.config
+    api_key = config.load_api_key()
+
+    if not api_key:
+        st.error("❌ API key not configured. Please set up your API key first.")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("⚙️ Open API Key Settings", use_container_width=True):
+                st.session_state.show_api_dialog = True
+                st.session_state.show_meeting_notes_dialog = False
+                if 'current_meeting_notes_file' in st.session_state:
+                    del st.session_state.current_meeting_notes_file
+                st.rerun()
+
+        with col2:
+            if st.button("✕ Close", use_container_width=True):
+                st.session_state.show_meeting_notes_dialog = False
+                if 'current_meeting_notes_file' in st.session_state:
+                    del st.session_state.current_meeting_notes_file
+                st.rerun()
+        return
+
+    # Check if transcription exists
+    transcription = file_manager.load_transcription(filepath)
+    if not transcription:
+        st.error("❌ No transcription found. Please transcribe the audio first.")
+        if st.button("✕ Close", use_container_width=True):
+            st.session_state.show_meeting_notes_dialog = False
+            if 'current_meeting_notes_file' in st.session_state:
+                del st.session_state.current_meeting_notes_file
+            st.rerun()
+        return
+
+    # Model selection
+    model_options = {f"{info['name']} - ${info['pricing']['input']:.2f}/${info['pricing']['output']:.2f} per 1M tokens": model_id
+                     for model_id, info in MEETING_NOTES_MODELS.items()}
+
+    selected_model_label = st.selectbox(
+        "Select Model",
+        options=list(model_options.keys()),
+        index=0,  # Default to gpt-5
+        help="Choose the GPT-5 model for generating meeting notes"
+    )
+    selected_model_id = model_options[selected_model_label]
+
+    # Language selection
+    language_options = {
+        "Auto-detect (recommended)": None,
+        "English": "English",
+        "Korean (한국어)": "Korean",
+        "Japanese (日本語)": "Japanese",
+        "Chinese (中文)": "Chinese",
+        "Spanish (Español)": "Spanish",
+        "French (Français)": "French",
+        "German (Deutsch)": "German"
+    }
+
+    selected_language_label = st.selectbox(
+        "Output Language",
+        options=list(language_options.keys()),
+        index=0,
+        help="Language for the meeting notes output"
+    )
+    selected_language = language_options[selected_language_label]
+
+    # Advanced options
+    with st.expander("⚙️ Advanced Options", expanded=False):
+        st.markdown("**Prompt Settings**")
+
+        # Initialize meeting notes service to get available prompts
+        meeting_notes_service = MeetingNotesService(api_key=api_key)
+        available_prompts = meeting_notes_service.get_available_prompts()
+
+        prompt_name = st.selectbox(
+            "Prompt Template",
+            options=available_prompts,
+            index=0 if "default" in available_prompts else 0,
+            help="Select a prompt template for meeting notes generation"
+        )
+
+        st.markdown("**Model Parameters**")
+
+        reasoning_effort = st.select_slider(
+            "Reasoning Effort",
+            options=["minimal", "low", "medium", "high"],
+            value="low",
+            help="Higher effort may produce better results but takes longer and costs more"
+        )
+
+        max_tokens = st.slider(
+            "Max Output Tokens",
+            min_value=1000,
+            max_value=8000,
+            value=4000,
+            step=500,
+            help="Maximum length of the generated meeting notes"
+        )
+
+        # Estimate cost
+        st.markdown("**Cost Estimation**")
+        cost_info = meeting_notes_service.estimate_cost(
+            transcription,
+            model=selected_model_id,
+            estimated_output_tokens=max_tokens
+        )
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Est. Input Tokens", f"{cost_info['input_tokens']:,}")
+        with col2:
+            st.metric("Est. Output Tokens", f"{cost_info['output_tokens']:,}")
+        with col3:
+            st.metric("Est. Cost", f"${cost_info['total_cost']:.4f}")
+
+    st.markdown("---")
+
+    # Action buttons
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        start_generation = st.button("📝 Generate Meeting Notes", type="primary", use_container_width=True)
+
+    with col2:
+        if st.button("✕ Close", use_container_width=True):
+            st.session_state.show_meeting_notes_dialog = False
+            if 'current_meeting_notes_file' in st.session_state:
+                del st.session_state.current_meeting_notes_file
+            st.rerun()
+
+    # Generate meeting notes logic
+    if start_generation:
+        try:
+            with st.spinner("🤖 Generating AI Meeting Notes..."):
+                # Initialize service
+                meeting_notes_service = MeetingNotesService(api_key=api_key)
+
+                # Generate meeting notes
+                result = meeting_notes_service.generate_meeting_notes(
+                    transcription_text=transcription,
+                    model=selected_model_id,
+                    prompt_name=prompt_name,
+                    language=selected_language,
+                    reasoning_effort=reasoning_effort,
+                    max_completion_tokens=max_tokens
+                )
+
+                meeting_notes_text = result['meeting_notes']
+
+                # Check if meeting notes is empty
+                if not meeting_notes_text or not meeting_notes_text.strip():
+                    st.session_state.meeting_notes_result = {
+                        'success': False,
+                        'error': 'API returned empty meeting notes. Please try again.',
+                        'debug_info': f"Result keys: {result.keys()}, Usage: {result.get('usage', {})}"
+                    }
+                    st.session_state.meeting_notes_completed = True
+                    st.rerun()
+                    return
+
+                # Save meeting notes
+                save_success, save_message = file_manager.save_meeting_notes(
+                    filepath,
+                    meeting_notes_text,
+                    model=selected_model_id,
+                    usage_info=result['usage']
+                )
+
+                # Store result in session state
+                st.session_state.meeting_notes_result = {
+                    'success': True,
+                    'notes': meeting_notes_text,
+                    'usage': result['usage'],
+                    'save_message': save_message,
+                    'save_success': save_success
+                }
+                st.session_state.meeting_notes_completed = True
+                st.rerun()
+
+        except Exception as e:
+            import traceback
+            # Store error in session state
+            st.session_state.meeting_notes_result = {
+                'success': False,
+                'error': str(e),
+                'traceback': traceback.format_exc()
+            }
+            st.session_state.meeting_notes_completed = True
+            st.rerun()
+
+
 def page_recordings():
     """Unified recordings page with transcription capability."""
     st.header("📂 Audio Recordings")
@@ -779,7 +1214,7 @@ def page_recordings():
         display_name = file_manager.get_display_name(filepath)
 
         with st.container():
-            col_checkbox, col1, col2, col3, col4, col5 = st.columns([0.3, 2.7, 2, 1, 1, 0.5])
+            col_checkbox, col1, col2, col3, col3_5, col4, col5 = st.columns([0.3, 2.7, 2, 1, 1, 1, 0.5])
 
             with col_checkbox:
                 # Checkbox for bulk selection - sync with session state
@@ -835,6 +1270,15 @@ def page_recordings():
                     st.session_state.show_transcribe_dialog = True
                     st.rerun()
 
+            with col3_5:
+                # AI Meeting Notes button - only enabled if transcription exists
+                has_transcription = file_manager.has_transcription(filepath)
+                if st.button("📝", key=f"meeting_notes_{filename}", use_container_width=True,
+                           help="Generate AI Meeting Notes", disabled=not has_transcription):
+                    st.session_state.current_meeting_notes_file = (filepath, filename)
+                    st.session_state.show_meeting_notes_dialog = True
+                    st.rerun()
+
             with col4:
                 # Edit name button
                 if st.button("✏️", key=f"edit_{filename}", use_container_width=True, help="Rename"):
@@ -859,28 +1303,188 @@ def page_recordings():
             # Expandable details
             with st.expander(f"📋 Details: {filename}"):
                 # Read and display audio file to avoid Streamlit media storage issues
+                # Note: Streamlit may show MediaFileStorage errors in logs during rerun, but these are harmless
                 try:
-                    with open(filepath, 'rb') as audio_file:
-                        audio_bytes = audio_file.read()
-                        st.audio(audio_bytes, format='audio/wav')
-                except Exception as e:
-                    st.warning(f"⚠️ Could not load audio file: {str(e)}")
+                    # Only load audio if file exists and is accessible
+                    if os.path.exists(filepath) and os.path.isfile(filepath):
+                        # Determine audio format from file extension
+                        file_ext = os.path.splitext(filepath)[1].lower()
+                        format_map = {
+                            '.wav': 'audio/wav',
+                            '.mp3': 'audio/mp3',
+                            '.m4a': 'audio/mp4',
+                            '.flac': 'audio/flac',
+                            '.ogg': 'audio/ogg',
+                            '.webm': 'audio/webm'
+                        }
+                        audio_format = format_map.get(file_ext, 'audio/wav')
 
-                # Show transcription if exists
+                        with open(filepath, 'rb') as audio_file:
+                            audio_bytes = audio_file.read()
+                            # Use a unique key to prevent caching issues
+                            st.audio(audio_bytes, format=audio_format)
+                    else:
+                        st.warning("⚠️ Audio file not found.")
+                except Exception as e:
+                    # Silently ignore Streamlit media storage errors
+                    if "MediaFileStorageError" not in str(type(e)):
+                        st.warning(f"⚠️ Could not load audio file: {str(e)}")
+
+                # Check what content is available
                 transcription = file_manager.load_transcription(filepath)
+                meeting_notes = file_manager.load_meeting_notes(filepath)
+
+                # Show toggle buttons if transcription exists
                 if transcription:
-                    st.markdown("**Transcription:**")
-                    st.text_area(
-                        "Transcription:",
-                        value=transcription,
-                        height=300,
-                        key=f"view_transcription_{filename}",
-                        label_visibility="collapsed"
-                    )
+                    # Toggle buttons for switching between Meeting Notes and Transcription
+                    view_toggle_key = f"view_toggle_{filename}"
+                    if view_toggle_key not in st.session_state:
+                        # Default to meeting notes if available, otherwise transcription
+                        st.session_state[view_toggle_key] = "meeting_notes" if meeting_notes else "transcription"
+
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        if st.button("📝 AI Meeting Notes", key=f"toggle_notes_{filename}",
+                                   use_container_width=True,
+                                   type="primary" if st.session_state[view_toggle_key] == "meeting_notes" else "secondary"):
+                            st.session_state[view_toggle_key] = "meeting_notes"
+                            st.rerun()
+                    with col_b:
+                        if st.button("📄 Transcription", key=f"toggle_trans_{filename}",
+                                   use_container_width=True,
+                                   type="primary" if st.session_state[view_toggle_key] == "transcription" else "secondary"):
+                            st.session_state[view_toggle_key] = "transcription"
+                            st.rerun()
+
+                    st.markdown("---")
+
+                    # Display content based on toggle
+                    if st.session_state[view_toggle_key] == "meeting_notes":
+                        if meeting_notes:
+                            # Render meeting notes as markdown in a scrollable container
+                            with st.container(height=400, border=True):
+                                st.markdown(meeting_notes)
+
+                            # Add "View Full Page" button
+                            if st.button("📖 View Full Page", key=f"fullpage_{filename}", use_container_width=True):
+                                st.session_state.meeting_notes_view_file = filepath
+                                st.session_state.current_page = "Meeting Notes View"
+                                st.rerun()
+                        else:
+                            st.info("*No AI Meeting Notes yet. Click the '📝' button above to generate.*")
+                    else:  # transcription
+                        # Keep transcription as text area for easier copying
+                        st.text_area(
+                            "Transcription:",
+                            value=transcription,
+                            height=400,
+                            key=f"view_transcription_{filename}",
+                            label_visibility="collapsed"
+                        )
                 else:
                     st.markdown("*No transcription available. Click 'Transcribe' button above.*")
 
             st.markdown("---")
+
+
+def page_meeting_notes_view():
+    """Full page view for AI Meeting Notes."""
+    file_manager = st.session_state.file_manager
+
+    # Get the selected file from session state
+    if 'meeting_notes_view_file' not in st.session_state:
+        st.warning("⚠️ No file selected. Please select a recording from the Recordings page.")
+        if st.button("← Back to Recordings"):
+            st.session_state.current_page = "Recordings"
+            if 'meeting_notes_view_file' in st.session_state:
+                del st.session_state.meeting_notes_view_file
+            st.rerun()
+        return
+
+    filepath = st.session_state.meeting_notes_view_file
+
+    # Check if file still exists
+    if not os.path.exists(filepath):
+        st.error("❌ File not found. It may have been deleted.")
+        if st.button("← Back to Recordings"):
+            st.session_state.current_page = "Recordings"
+            if 'meeting_notes_view_file' in st.session_state:
+                del st.session_state.meeting_notes_view_file
+            st.rerun()
+        return
+
+    # Load meeting notes
+    meeting_notes = file_manager.load_meeting_notes(filepath)
+
+    if not meeting_notes:
+        st.warning("⚠️ No AI Meeting Notes found for this recording.")
+        if st.button("← Back to Recordings"):
+            st.session_state.current_page = "Recordings"
+            if 'meeting_notes_view_file' in st.session_state:
+                del st.session_state.meeting_notes_view_file
+            st.rerun()
+        return
+
+    # Get display name and metadata
+    display_name = file_manager.get_display_name(filepath)
+    filename = os.path.basename(filepath)
+    metadata = file_manager.load_metadata(filepath)
+
+    # Header with back button
+    col1, col2 = st.columns([5, 1])
+    with col1:
+        st.header(f"📝 {display_name}")
+        st.caption(f"📄 {filename}")
+    with col2:
+        if st.button("← Back", use_container_width=True):
+            st.session_state.current_page = "Recordings"
+            if 'meeting_notes_view_file' in st.session_state:
+                del st.session_state.meeting_notes_view_file
+            st.rerun()
+
+    st.markdown("---")
+
+    # Show metadata if available
+    if metadata:
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            if 'meeting_notes_model' in metadata:
+                st.metric("Model", metadata['meeting_notes_model'])
+        with col_b:
+            if 'meeting_notes_generated_at' in metadata:
+                from datetime import datetime
+                generated_time = metadata['meeting_notes_generated_at']
+                try:
+                    dt = datetime.fromisoformat(generated_time)
+                    st.metric("Generated", dt.strftime("%Y-%m-%d %H:%M"))
+                except:
+                    st.metric("Generated", generated_time[:16])
+        with col_c:
+            if 'meeting_notes_usage' in metadata:
+                usage = metadata['meeting_notes_usage']
+                total_tokens = usage.get('total_tokens', 0)
+                st.metric("Tokens Used", f"{total_tokens:,}")
+
+        st.markdown("---")
+
+    # Display meeting notes with full width
+    st.markdown(meeting_notes)
+
+    st.markdown("---")
+
+    # Action buttons at the bottom
+    col1, col2, col3 = st.columns([1, 1, 3])
+    with col1:
+        if st.button("🔄 Regenerate", use_container_width=True, help="Generate new meeting notes"):
+            st.session_state.current_meeting_notes_file = (filepath, filename)
+            st.session_state.show_meeting_notes_dialog = True
+            st.rerun()
+    with col2:
+        if st.button("📄 View Transcription", use_container_width=True):
+            st.session_state.current_page = "Recordings"
+            if 'meeting_notes_view_file' in st.session_state:
+                del st.session_state.meeting_notes_view_file
+            st.rerun()
 
 
 def page_transcribe():
@@ -1355,6 +1959,22 @@ def create_streamlit_app(
         initial_sidebar_state="expanded"
     )
 
+    # Custom CSS for wider sidebar
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"][aria-expanded="true"] {
+            min-width: 350px;
+            max-width: 350px;
+        }
+        [data-testid="stSidebar"][aria-expanded="false"] {
+            margin-left: -350px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
     # Initialize session state
     init_session_state(recorder, file_manager, transcription_service, config)
 
@@ -1362,11 +1982,20 @@ def create_streamlit_app(
     st.sidebar.title("🎙️ AI Meeting Notes")
     st.sidebar.markdown("Record or upload audio to transcribe your meetings.")
 
-    # API Key Settings button in sidebar
+    # Settings buttons in sidebar
     if st.sidebar.button("⚙️ API Key Settings", use_container_width=True):
         st.session_state.show_api_dialog = True
 
+    if st.sidebar.button("📝 Prompt Settings", use_container_width=True):
+        st.session_state.show_prompt_dialog = True
+
     st.sidebar.markdown("---")
+
+    # Check if we're viewing meeting notes full page (overrides navigation)
+    if st.session_state.get('current_page') == "Meeting Notes View":
+        page_meeting_notes_view()
+        # Don't show dialogs on full page view
+        return
 
     page = st.sidebar.radio(
         "Navigation",
@@ -1393,6 +2022,9 @@ def create_streamlit_app(
     if st.session_state.get('show_api_dialog', False):
         show_api_key_dialog()
 
+    if st.session_state.get('show_prompt_dialog', False):
+        show_prompt_settings_dialog()
+
     if st.session_state.get('show_rename_dialog', False):
         if 'editing_file' in st.session_state:
             filepath = st.session_state.editing_file
@@ -1402,3 +2034,8 @@ def create_streamlit_app(
         if 'current_transcribe_file' in st.session_state:
             filepath, filename = st.session_state.current_transcribe_file
             show_transcribe_dialog(filepath, filename)
+
+    if st.session_state.get('show_meeting_notes_dialog', False):
+        if 'current_meeting_notes_file' in st.session_state:
+            filepath, filename = st.session_state.current_meeting_notes_file
+            show_meeting_notes_dialog(filepath, filename)
