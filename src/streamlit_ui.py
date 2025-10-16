@@ -1959,21 +1959,21 @@ def create_streamlit_app(
         initial_sidebar_state="expanded"
     )
 
-    # Custom CSS for wider sidebar
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebar"][aria-expanded="true"] {
-            min-width: 350px;
-            max-width: 350px;
-        }
-        [data-testid="stSidebar"][aria-expanded="false"] {
-            margin-left: -350px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    # # Custom CSS for wider sidebar
+    # st.markdown(
+    #     """
+    #     <style>
+    #     [data-testid="stSidebar"][aria-expanded="true"] {
+    #         min-width: 350px;
+    #         max-width: 350px;
+    #     }
+    #     [data-testid="stSidebar"][aria-expanded="false"] {
+    #         margin-left: -350px;
+    #     }
+    #     </style>
+    #     """,
+    #     unsafe_allow_html=True
+    # )
 
     # Initialize session state
     init_session_state(recorder, file_manager, transcription_service, config)
