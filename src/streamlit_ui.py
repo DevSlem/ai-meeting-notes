@@ -1467,8 +1467,41 @@ def page_meeting_notes_view():
 
         st.markdown("---")
 
-    # Display meeting notes with full width
-    st.markdown(meeting_notes)
+    # Toggle between markdown and raw text view
+    view_mode_key = f"fullpage_view_mode_{filename}"
+    if view_mode_key not in st.session_state:
+        st.session_state[view_mode_key] = "markdown"  # Default to markdown
+
+    # Toggle buttons
+    col_toggle1, col_toggle2 = st.columns(2)
+    with col_toggle1:
+        if st.button("📝 Markdown View", key=f"markdown_view_{filename}",
+                   use_container_width=True,
+                   type="primary" if st.session_state[view_mode_key] == "markdown" else "secondary"):
+            st.session_state[view_mode_key] = "markdown"
+            st.rerun()
+    with col_toggle2:
+        if st.button("📄 Raw Text View", key=f"raw_view_{filename}",
+                   use_container_width=True,
+                   type="primary" if st.session_state[view_mode_key] == "raw" else "secondary"):
+            st.session_state[view_mode_key] = "raw"
+            st.rerun()
+
+    st.markdown("---")
+
+    # Display content based on selected mode
+    if st.session_state[view_mode_key] == "markdown":
+        # Render as markdown
+        st.markdown(meeting_notes)
+    else:
+        # Display as raw text in a text area
+        st.text_area(
+            "Raw Meeting Notes:",
+            value=meeting_notes,
+            height=600,
+            key=f"raw_text_{filename}",
+            label_visibility="collapsed"
+        )
 
     st.markdown("---")
 
